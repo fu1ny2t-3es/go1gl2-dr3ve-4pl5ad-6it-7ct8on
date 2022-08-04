@@ -14,8 +14,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/sethvargo/go-githubactions"
@@ -24,96 +22,13 @@ import (
 )
 
 const (
-	scope                 = "https://www.googleapis.com/auth/drive.file"
-	filenameInput         = "filename"
-	nameInput             = "name"
-	folderIdInput         = "folderId"
+	scope                 = "https://www.googleapis.com/auth/drive"
 	credentialsInput      = "credentials"
-	overwrite             = "false"
-	mimeTypeInput         = "mimeType"
-	useCompleteSourceName = "useCompleteSourceFilenameAsName"
-	namePrefixInput       = "namePrefix"
 )
 
-func uploadToDrive(svc *drive.Service, filename string, folderId string, driveFile *drive.File, name string, mimeType string) {
-	file, err := os.Open(filename)
-	if err != nil {
-		githubactions.Fatalf(fmt.Sprintf("opening file with filename: %v failed with error: %v", filename, err))
-	}
-
-	if driveFile != nil {
-		f := &drive.File{
-			Name:     name,
-			MimeType: mimeType,
-		}
-		_, err = svc.Files.Update(driveFile.Id, f).AddParents(folderId).Media(file).SupportsAllDrives(true).Do()
-	} else {
-		f := &drive.File{
-			Name:     name,
-			MimeType: mimeType,
-			Parents:  []string{folderId},
-		}
-		_, err = svc.Files.Create(f).Media(file).SupportsAllDrives(true).Do()
-	}
-
-	if err != nil {
-		githubactions.Fatalf(fmt.Sprintf("creating/updating file failed with error: %v", err))
-	} else {
-		githubactions.Debugf("Uploaded/Updated file.")
-	}
-}
-
 func main() {
-
-	// get filename argument from action input
-	filename := githubactions.GetInput(filenameInput)
-	if filename == "" {
-		missingInput(filenameInput)
-	}
-	files, err := filepath.Glob(filename)
-	fmt.Printf("Files: %v\n", files)
-	if err != nil {
-		githubactions.Fatalf(fmt.Sprintf("Invalid filename pattern: %v", err))
-	}
-	if len(files) == 0 {
-		githubactions.Fatalf(fmt.Sprintf("No file found! pattern: %s", filename))
-	}
-
-	// get overwrite flag
-	var overwriteFlag bool
-	overwrite := githubactions.GetInput("overwrite")
-	if overwrite == "" {
-		githubactions.Warningf("Overwrite is disabled.")
-		overwriteFlag = false
-	} else {
-		overwriteFlag, _ = strconv.ParseBool(overwrite)
-	}
-	// get name argument from action input
-	name := githubactions.GetInput(nameInput)
-
-	// get folderId argument from action input
-	folderId := githubactions.GetInput(folderIdInput)
-	if folderId == "" {
-		missingInput(folderIdInput)
-	}
-
-	// get file mimeType argument from action input
-	mimeType := githubactions.GetInput(mimeTypeInput)
-
-	var useCompleteSourceFilenameAsNameFlag bool
-	useCompleteSourceFilenameAsName := githubactions.GetInput(useCompleteSourceName)
-	if useCompleteSourceFilenameAsName == "" {
-		fmt.Println("useCompleteSourceFilenameAsName is disabled.")
-		useCompleteSourceFilenameAsNameFlag = false
-	} else {
-		useCompleteSourceFilenameAsNameFlag, _ = strconv.ParseBool(useCompleteSourceFilenameAsName)
-	}
-
-	// get filename prefix
-	filenamePrefix := githubactions.GetInput(namePrefixInput)
-
 	// get base64 encoded credentials argument from action input
-	credentials := githubactions.GetInput(credentialsInput)
+	credentials := os.Args[1]
 	if credentials == "" {
 		missingInput(credentialsInput)
 	}
@@ -144,65 +59,46 @@ func main() {
 		log.Println(err)
 	}
 
-	useSourceFilename := len(files) > 1
-
-	for _, file := range files {
-		var targetName string
-		if useCompleteSourceFilenameAsNameFlag {
-			targetName = file
-		} else if useSourceFilename || name == "" {
-			targetName = filepath.Base(file)
-		} else {
-			targetName = name
-		}
-		if targetName == "" {
-			githubactions.Fatalf("Could not discover target file name")
-		} else if filenamePrefix != "" {
-			targetName = filenamePrefix + targetName
-		}
-		uploadFile(svc, file, folderId, targetName, mimeType, overwriteFlag)
+	r, err := svc.Files.List().
+		Q("'me' in owners").
+		Fields("files(id,name,size),nextPageToken").
+		OrderBy("name").
+		PageSize(1000).
+		IncludeItemsFromAllDrives(true).
+		SupportsAllDrives(true).
+		Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve files: %v", err)
 	}
-}
 
-func uploadFile(svc *drive.Service, filename string, folderId string, name string, mimeType string, overwriteFlag bool) {
+	if os.Args[2] != "" {
+		fmt.Print("[", os.Args[2], "]  ");
+	}
 
-	fmt.Printf("target file name: %s\n", name)
-
-	if overwriteFlag {
-		r, err := svc.Files.List().Fields("files(name,id,mimeType,parents)").Q("name='" + name + "'").IncludeItemsFromAllDrives(true).Corpora("allDrives").SupportsAllDrives(true).Do()
-		if err != nil {
-			log.Fatalf("Unable to retrieve files: %v", err)
-			fmt.Println("Unable to retrieve files")
-		}
-		fmt.Printf("Files: %d\n", len(r.Files))
-		var currentFile *drive.File = nil
+	fmt.Println("Files:")
+	if len(r.Files) != 0 {
 		for _, i := range r.Files {
-			found := false
-			if name == i.Name {
-				currentFile = i
-				for _, p := range i.Parents {
-					if p == folderId {
-						fmt.Println("file found in expected folder")
-						found = true
-						break
-					}
-				}
-			}
-			if found {
-				break
-			}
+			fmt.Printf("%v (%vs)\n", i.Name, i.Id)
 		}
-
-		if currentFile == nil {
-			fmt.Println("No similar files found. Creating a new file")
-			uploadToDrive(svc, filename, folderId, nil, name, mimeType)
-		} else {
-			fmt.Printf("Overwriting file: %s (%s)\n", currentFile.Name, currentFile.Id)
-			uploadToDrive(svc, filename, folderId, currentFile, name, mimeType)
-		}
-	} else {
-		uploadToDrive(svc, filename, folderId, nil, name, mimeType)
 	}
+
+
+	about, err := svc.About.Get().Fields("storageQuota").Do()
+	if err != nil {
+		log.Fatalf("Unable to get quota: %v", err)
+	}
+
+	quota := about.StorageQuota
+
+	fmt.Printf("Used: %.2f\n", float32(quota.Usage) / 1024.0 / 1024.0 / 1024.0)
+	fmt.Printf("Free: %.2f\n", float32(quota.Limit-quota.Usage) / 1024.0 / 1024.0 / 1024.0)
+	fmt.Printf("Total: %.2f\n", float32(quota.Limit) / 1024.0 / 1024.0 / 1024.0)
+
+	if quota.Usage >= quota.Limit {
+		fmt.Printf("###  Warning: Free up drive space  ###")
+	}
+
+	fmt.Printf("\n\n")
 }
 
 func missingInput(inputName string) {
