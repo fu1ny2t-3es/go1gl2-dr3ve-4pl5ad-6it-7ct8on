@@ -14,8 +14,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/sethvargo/go-githubactions"
@@ -24,96 +22,16 @@ import (
 )
 
 const (
-	scope                 = "https://www.googleapis.com/auth/drive.file"
-	filenameInput         = "filename"
-	nameInput             = "name"
-	folderIdInput         = "folderId"
+	scope                 = "https://www.googleapis.com/auth/drive"		// 404 scope override
+	srcIdInput            = "srcId"
+	dstIdInput            = "dstId"
+	trashIdInput          = "trashId"
 	credentialsInput      = "credentials"
-	overwrite             = "false"
-	mimeTypeInput         = "mimeType"
-	useCompleteSourceName = "useCompleteSourceFilenameAsName"
-	namePrefixInput       = "namePrefix"
 )
 
-func uploadToDrive(svc *drive.Service, filename string, folderId string, driveFile *drive.File, name string, mimeType string) {
-	file, err := os.Open(filename)
-	if err != nil {
-		githubactions.Fatalf(fmt.Sprintf("opening file with filename: %v failed with error: %v", filename, err))
-	}
-
-	if driveFile != nil {
-		f := &drive.File{
-			Name:     name,
-			MimeType: mimeType,
-		}
-		_, err = svc.Files.Update(driveFile.Id, f).AddParents(folderId).Media(file).SupportsAllDrives(true).Do()
-	} else {
-		f := &drive.File{
-			Name:     name,
-			MimeType: mimeType,
-			Parents:  []string{folderId},
-		}
-		_, err = svc.Files.Create(f).Media(file).SupportsAllDrives(true).Do()
-	}
-
-	if err != nil {
-		githubactions.Fatalf(fmt.Sprintf("creating/updating file failed with error: %v", err))
-	} else {
-		githubactions.Debugf("Uploaded/Updated file.")
-	}
-}
-
 func main() {
-
-	// get filename argument from action input
-	filename := githubactions.GetInput(filenameInput)
-	if filename == "" {
-		missingInput(filenameInput)
-	}
-	files, err := filepath.Glob(filename)
-	fmt.Printf("Files: %v\n", files)
-	if err != nil {
-		githubactions.Fatalf(fmt.Sprintf("Invalid filename pattern: %v", err))
-	}
-	if len(files) == 0 {
-		githubactions.Fatalf(fmt.Sprintf("No file found! pattern: %s", filename))
-	}
-
-	// get overwrite flag
-	var overwriteFlag bool
-	overwrite := githubactions.GetInput("overwrite")
-	if overwrite == "" {
-		githubactions.Warningf("Overwrite is disabled.")
-		overwriteFlag = false
-	} else {
-		overwriteFlag, _ = strconv.ParseBool(overwrite)
-	}
-	// get name argument from action input
-	name := githubactions.GetInput(nameInput)
-
-	// get folderId argument from action input
-	folderId := githubactions.GetInput(folderIdInput)
-	if folderId == "" {
-		missingInput(folderIdInput)
-	}
-
-	// get file mimeType argument from action input
-	mimeType := githubactions.GetInput(mimeTypeInput)
-
-	var useCompleteSourceFilenameAsNameFlag bool
-	useCompleteSourceFilenameAsName := githubactions.GetInput(useCompleteSourceName)
-	if useCompleteSourceFilenameAsName == "" {
-		fmt.Println("useCompleteSourceFilenameAsName is disabled.")
-		useCompleteSourceFilenameAsNameFlag = false
-	} else {
-		useCompleteSourceFilenameAsNameFlag, _ = strconv.ParseBool(useCompleteSourceFilenameAsName)
-	}
-
-	// get filename prefix
-	filenamePrefix := githubactions.GetInput(namePrefixInput)
-
 	// get base64 encoded credentials argument from action input
-	credentials := githubactions.GetInput(credentialsInput)
+	credentials := os.Args[1]
 	if credentials == "" {
 		missingInput(credentialsInput)
 	}
@@ -144,64 +62,95 @@ func main() {
 		log.Println(err)
 	}
 
-	useSourceFilename := len(files) > 1
+	srcId := os.Args[2]
+	dstId := os.Args[3]
+	trashId := os.Args[4]
+	driveNum := os.Args[5]
 
-	for _, file := range files {
-		var targetName string
-		if useCompleteSourceFilenameAsNameFlag {
-			targetName = file
-		} else if useSourceFilename || name == "" {
-			targetName = filepath.Base(file)
-		} else {
-			targetName = name
-		}
-		if targetName == "" {
-			githubactions.Fatalf("Could not discover target file name")
-		} else if filenamePrefix != "" {
-			targetName = filenamePrefix + targetName
-		}
-		uploadFile(svc, file, folderId, targetName, mimeType, overwriteFlag)
+
+	// #########################################################
+
+
+	r, err := svc.Files.List().
+		Q("'me' in owners").
+		Fields("files(size),nextPageToken").
+		OrderBy("name").
+		PageSize(1000).
+		IncludeItemsFromAllDrives(true).
+		SupportsAllDrives(true).
+		Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve files: %v", err)
 	}
-}
 
-func uploadFile(svc *drive.Service, filename string, folderId string, name string, mimeType string, overwriteFlag bool) {
 
-	fmt.Printf("target file name: %s\n", name)
+	about, err := svc.About.Get().Fields("storageQuota").Do()
+	if err != nil {
+		log.Fatalf("Unable to get quota: %v", err)
+	}
 
-	if overwriteFlag {
-		r, err := svc.Files.List().Fields("files(name,id,mimeType,parents)").Q("name='" + name + "'").IncludeItemsFromAllDrives(true).Corpora("allDrives").SupportsAllDrives(true).Do()
-		if err != nil {
-			log.Fatalf("Unable to retrieve files: %v", err)
-			fmt.Println("Unable to retrieve files")
-		}
-		fmt.Printf("Files: %d\n", len(r.Files))
-		var currentFile *drive.File = nil
-		for _, i := range r.Files {
-			found := false
-			if name == i.Name {
-				currentFile = i
-				for _, p := range i.Parents {
-					if p == folderId {
-						fmt.Println("file found in expected folder")
-						found = true
-						break
-					}
-				}
-			}
-			if found {
-				break
-			}
-		}
+	quota := about.StorageQuota
+	var driveSize int64 = quota.Limit-quota.Usage
 
-		if currentFile == nil {
-			fmt.Println("No similar files found. Creating a new file")
-			uploadToDrive(svc, filename, folderId, nil, name, mimeType)
-		} else {
-			fmt.Printf("Overwriting file: %s (%s)\n", currentFile.Name, currentFile.Id)
-			uploadToDrive(svc, filename, folderId, currentFile, name, mimeType)
-		}
+
+	// #########################################################
+
+
+	body := fmt.Sprintf("'%s' in parents", srcId)
+	r, err = svc.Files.List().
+		Q(body).
+		Fields("files(id,name,size),nextPageToken").
+		OrderBy("name").
+		PageSize(1000).
+		IncludeItemsFromAllDrives(true).
+		SupportsAllDrives(true).
+		Do()
+	if err != nil {
+		log.Fatalf("Unable to retrieve files: %v", err)
+	}
+
+	fmt.Print("[drive-", driveNum, "]  ")
+	if len(r.Files) == 0 {
+		fmt.Println("No files left.")
 	} else {
-		uploadToDrive(svc, filename, folderId, nil, name, mimeType)
+		fmt.Println("Files:")
+		for _, i := range r.Files {
+			if (i.Size <= driveSize) && (i.Size > 0) {
+				copyFile, err := svc.Files.Get(i.Id).SupportsAllDrives(true).Do()
+				if err == nil {
+					copyFile.Parents = []string{dstId}
+					copyFile.Id = ""
+
+					_, err := svc.Files.Copy(i.Id, copyFile).SupportsAllDrives(true).Do()
+					if err == nil {
+						fmt.Printf("Copied %v (%vs)\n", i.Name, i.Id)
+						driveSize -= copyFile.Size
+
+						for ok := true; ok; ok = true {
+							movedFile := drive.File{}
+							_, err := svc.Files.Update(i.Id, &movedFile).
+									AddParents(trashId).
+									RemoveParents(srcId).
+									SupportsAllDrives(true).
+									Do()
+							if err == nil {
+								break;
+								//log.Println(err)
+								//log.Println(fmt.Sprintf("%v -- %v  [%d / %d]", err, i.Name, i.Size, driveSize))
+							}
+						}
+					} else {
+						//log.Println(err)
+						//log.Println(fmt.Sprintf("%v -- %v  [%d / %d]", err, i.Name, i.Size, driveSize))
+					}
+				} else {
+					//log.Println(err)
+					//log.Println(fmt.Sprintf("%v -- %v  [%d / %d]", err, i.Name, i.Size, driveSize))
+				}
+			} else {
+				//log.Println(fmt.Sprintf("File too large %v  [%d / %d]", i.Name, i.Size, driveSize))
+			}
+		}
 	}
 }
 
