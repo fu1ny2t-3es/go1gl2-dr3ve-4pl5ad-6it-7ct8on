@@ -82,7 +82,7 @@ func main() {
 
 
 	body := fmt.Sprintf("'%s' in parents", srcId)
-	r, err = svc.Files.List().
+	r, err := svc.Files.List().
 		Q(body).
 		Fields("files(id,name,size),nextPageToken").
 		OrderBy("name").
