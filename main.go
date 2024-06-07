@@ -183,7 +183,7 @@ func main() {
 	// #########################################################
 
 
-	r, err := svc.Files.List().
+	r, err = svc.Files.List().
 		Q("'me' in owners").
 		Fields("files(id,name,size),nextPageToken").
 		OrderBy("name").
