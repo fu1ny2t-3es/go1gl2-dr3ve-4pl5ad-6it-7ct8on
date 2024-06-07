@@ -154,8 +154,7 @@ func main() {
 
 						if err != nil {
 							log.Println(err)
-						}
-						else {
+						} else {
 							for ok := true; ok; ok = true {
 								_, err := svc.Files.Update(i.Id, &movedFile).
 										AddParents(trashId).
