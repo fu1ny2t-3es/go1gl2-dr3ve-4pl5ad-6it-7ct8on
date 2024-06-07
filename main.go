@@ -81,41 +81,6 @@ func main() {
 	// #########################################################
 
 
-	r, err := svc.Files.List().
-		Q("'me' in owners").
-		Fields("files(id,name,size),nextPageToken").
-		OrderBy("name").
-		PageSize(1000).
-		IncludeItemsFromAllDrives(true).
-		SupportsAllDrives(true).
-		Do()
-
-	if err != nil {
-		log.Fatalf("Unable to retrieve files: %v", err)
-	}
-
-	if os.Args[2] != "" {
-		fmt.Print("[", os.Args[2], "]  ");
-	}
-
-
-	if len(r.Files) != 0 {
-		for _, i := range r.Files {
-			if strings.HasPrefix(i.Name, "#@__") {
-				fmt.Printf("Erasing ###  %v (%vs)\n", i.Name, i.Id)
-
-				err := svc.Files.Delete(i.Id).Do();
-				if err != nil {
-					githubactions.Fatalf(fmt.Sprintf("deleting file failed with error: %v", err))
-				}
-			}
-		}
-	}
-
-
-	// #########################################################
-
-
 	body := fmt.Sprintf("'%s' in parents", srcId)
 	r, err = svc.Files.List().
 		Q(body).
@@ -205,12 +170,29 @@ func main() {
 
 	if len(r.Files) != 0 {
 		for _, i := range r.Files {
-			fmt.Printf("%v (%v)\n", i.Name, i.Id)
+			if strings.HasPrefix(i.Name, "#@__") {
+				fmt.Printf("Erasing ###  %v (%vs)\n", i.Name, i.Id)
+
+				err := svc.Files.Delete(i.Id).Do();
+				if err != nil {
+					githubactions.Fatalf(fmt.Sprintf("deleting file failed with error: %v", err))
+				}
+			} else {
+				fmt.Printf("%v (%v)\n", i.Name, i.Id)
+			}
 		}
 	}
 
 
 	// #########################################################
+
+
+	about, err = svc.About.Get().Fields("storageQuota").Do()
+	if err != nil {
+		log.Fatalf("Unable to get quota: %v", err)
+	}
+
+	quota = about.StorageQuota
 
 
 	fmt.Printf("Used: %.2f\n", float32(quota.Usage) / 1024.0 / 1024.0 / 1024.0)
