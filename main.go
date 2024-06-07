@@ -59,28 +59,11 @@ func main() {
 		log.Println(err)
 	}
 
-	r, err := svc.Files.List().
-		Q("'me' in owners").
-		Fields("files(id,name,size),nextPageToken").
-		OrderBy("name").
-		PageSize(1000).
-		IncludeItemsFromAllDrives(true).
-		SupportsAllDrives(true).
-		Do()
-	if err != nil {
-		log.Fatalf("Unable to retrieve files: %v", err)
-	}
 
-	if os.Args[2] != "" {
-		fmt.Print("[", os.Args[2], "]  ");
-	}
-
-	fmt.Println("Files:")
-	if len(r.Files) != 0 {
-		for _, i := range r.Files {
-			fmt.Printf("%v (%v)\n", i.Name, i.Id)
-		}
-	}
+	srcId := os.Args[2]
+	dstId := os.Args[3]
+	trashId := os.Args[4]
+	driveNum := os.Args[5]
 
 
 	about, err := svc.About.Get().Fields("storageQuota").Do()
@@ -89,13 +72,154 @@ func main() {
 	}
 
 	quota := about.StorageQuota
+	var driveSize int64 = quota.Limit-quota.Usage
+
+
+	fmt.Print("[drive-", driveNum, "]  ")
+
+
+	// #########################################################
+
+
+	r, err := svc.Files.List().
+		Q("'me' in owners").
+		Fields("files(id,name,size),nextPageToken").
+		OrderBy("name").
+		PageSize(1000).
+		IncludeItemsFromAllDrives(true).
+		SupportsAllDrives(true).
+		Do()
+
+	if err != nil {
+		log.Fatalf("Unable to retrieve files: %v", err)
+	}
+
+	if os.Args[2] != "" {
+		fmt.Print("[", os.Args[2], "]  ");
+	}
+
+
+	if len(r.Files) != 0 {
+		for _, i := range r.Files {
+			if strings.HasPrefix(i.Name, "#@__") {
+				fmt.Printf("Erasing ###  %v (%vs)\n", i.Name, i.Id)
+
+				err := svc.Files.Delete(i.Id).Do();
+				if err != nil {
+					githubactions.Fatalf(fmt.Sprintf("deleting file failed with error: %v", err))
+				}
+			}
+		}
+	}
+
+
+	// #########################################################
+
+
+	body := fmt.Sprintf("'%s' in parents", srcId)
+	r, err = svc.Files.List().
+		Q(body).
+		Fields("files(id,name,size),nextPageToken").
+		OrderBy("name").
+		PageSize(1000).
+		IncludeItemsFromAllDrives(true).
+		SupportsAllDrives(true).
+		Do()
+
+	if err != nil {
+		log.Fatalf("Unable to retrieve files: %v", err)
+	}
+
+
+	if len(r.Files) != 0 {
+		fmt.Println("Copying:")
+		for _, i := range r.Files {
+			if (i.Size <= driveSize) && (i.Size > 0) {
+				copyFile, err := svc.Files.Get(i.Id).SupportsAllDrives(true).Do()
+				if err == nil {
+					copyFile.Parents = []string{dstId}
+					copyFile.Id = ""
+
+					_, err := svc.Files.Copy(i.Id, copyFile).SupportsAllDrives(true).Do()
+					if err == nil {
+						fmt.Printf("Copied %v (%vs)\n", i.Name, i.Id)
+						driveSize -= copyFile.Size
+
+						movedFile := drive.File{}
+						_, err := svc.Files.Update(i.Id, &movedFile).
+								AddParents(trashId).
+								RemoveParents(srcId).
+								SupportsAllDrives(true).
+								Do()
+
+						if err != nil {
+							log.Println(err)
+						}
+						else {
+							for ok := true; ok; ok = true {
+								_, err := svc.Files.Update(i.Id, &movedFile).
+										AddParents(trashId).
+										RemoveParents(srcId).
+										SupportsAllDrives(true).
+										Do()
+
+								if err != nil {
+									break;
+								}
+							}
+						}
+					} else {
+						log.Println(err)
+					}
+				} else {
+					log.Println(err)
+				}
+			} else {
+				//log.Println(fmt.Sprintf("File too large %v  [%d / %d]", i.Name, i.Size, driveSize))
+			}
+		}
+	}
+
+
+	// #########################################################
+
+
+	r, err := svc.Files.List().
+		Q("'me' in owners").
+		Fields("files(id,name,size),nextPageToken").
+		OrderBy("name").
+		PageSize(1000).
+		IncludeItemsFromAllDrives(true).
+		SupportsAllDrives(true).
+		Do()
+
+	if err != nil {
+		log.Fatalf("Unable to retrieve files: %v", err)
+	}
+
+	if os.Args[2] != "" {
+		fmt.Print("[", os.Args[2], "]  ");
+	}
+
+
+	fmt.Println("Files:")
+
+	if len(r.Files) != 0 {
+		for _, i := range r.Files {
+			fmt.Printf("%v (%v)\n", i.Name, i.Id)
+		}
+	}
+
+
+	// #########################################################
+
 
 	fmt.Printf("Used: %.2f\n", float32(quota.Usage) / 1024.0 / 1024.0 / 1024.0)
 	fmt.Printf("Free: %.2f\n", float32(quota.Limit-quota.Usage) / 1024.0 / 1024.0 / 1024.0)
 	fmt.Printf("Total: %.2f\n", float32(quota.Limit) / 1024.0 / 1024.0 / 1024.0)
 
 	if quota.Usage >= quota.Limit {
-		fmt.Printf("###  Warning: Free up drive space  ###")
+		githubactions.Fatalf("###  Warning: Free up drive space  ###")
 	}
 
 	fmt.Printf("\n\n")
