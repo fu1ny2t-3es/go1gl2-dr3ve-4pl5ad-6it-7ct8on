@@ -120,6 +120,7 @@ func main() {
 						if err != nil {
 							log.Println(err)
 						} else {
+							errorTimeout := 0
 							for ok := true; ok; ok = true {
 								_, err := svc.Files.Update(i.Id, &movedFile).
 										AddParents(trashId).
@@ -128,6 +129,11 @@ func main() {
 										Do()
 
 								if err != nil {
+									break;
+								}
+
+								errorTimeout += 1
+								if (errorTimeout >= 100) {
 									break;
 								}
 							}
