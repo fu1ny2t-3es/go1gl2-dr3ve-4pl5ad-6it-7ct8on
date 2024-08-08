@@ -132,7 +132,7 @@ func main() {
 								}
 
 								errorTimeout += 1
-								if (errorTimeout >= 5) {
+								if (errorTimeout >= 1000) {
 									break;
 								}
 							}
