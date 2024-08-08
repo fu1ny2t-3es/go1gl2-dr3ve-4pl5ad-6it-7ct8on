@@ -96,7 +96,7 @@ func main() {
 				continue
 			}
 
-			var quota := about.StorageQuota
+			var quota = about.StorageQuota
 			var driveSize int64 = quota.Limit-quota.Usage
 
 			if (i.Size < driveSize) && (i.Size > 0) {
