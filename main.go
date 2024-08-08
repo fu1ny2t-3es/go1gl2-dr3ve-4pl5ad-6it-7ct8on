@@ -107,7 +107,6 @@ func main() {
 					_, err := svc.Files.Copy(i.Id, copyFile).SupportsAllDrives(true).Do()
 					if err == nil {
 						fmt.Printf("Copied %v (%vs)\n", i.Name, i.Id)
-						driveSize -= copyFile.Size
 
 						movedFile := drive.File{}
 						_, err := svc.Files.Update(i.Id, &movedFile).
