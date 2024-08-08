@@ -66,6 +66,12 @@ func main() {
 	driveNum := os.Args[5]
 
 
+	about, err := svc.About.Get().Fields("storageQuota").Do()
+	if err != nil {
+		log.Fatalf("Unable to get quota: %v", err)
+	}
+
+	quota := about.StorageQuota
 	fmt.Print("[drive-", driveNum, "]  ")
 
 
@@ -93,10 +99,10 @@ func main() {
 			about, err := svc.About.Get().Fields("storageQuota").Do()
 			if err != nil {
 				log.Fatalf("Unable to get quota: %v", err)
-				continue
 			}
 
-			var quota = about.StorageQuota
+			quota := about.StorageQuota
+
 			var driveSize int64 = quota.Limit-quota.Usage
 
 			if (i.Size < driveSize) && (i.Size > 0) {
@@ -128,12 +134,12 @@ func main() {
 										Do()
 
 								if err != nil {
-									break
+									break;
 								}
 
 								errorTimeout += 1
 								if (errorTimeout >= 1000) {
-									break
+									break;
 								}
 							}
 						}
