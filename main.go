@@ -72,9 +72,6 @@ func main() {
 	}
 
 	quota := about.StorageQuota
-	var driveSize int64 = quota.Limit-quota.Usage
-
-
 	fmt.Print("[drive-", driveNum, "]  ")
 
 
@@ -99,7 +96,9 @@ func main() {
 	if len(r.Files) != 0 {
 		fmt.Println("Copying:")
 		for _, i := range r.Files {
-			if (i.Size <= driveSize) && (i.Size > 0) {
+			var driveSize int64 = quota.Limit-quota.Usage
+
+			if (i.Size < driveSize) && (i.Size > 0) {
 				copyFile, err := svc.Files.Get(i.Id).SupportsAllDrives(true).Do()
 				if err == nil {
 					copyFile.Parents = []string{dstId}
@@ -133,7 +132,7 @@ func main() {
 								}
 
 								errorTimeout += 1
-								if (errorTimeout >= 100) {
+								if (errorTimeout >= 5) {
 									break;
 								}
 							}
@@ -145,7 +144,7 @@ func main() {
 					log.Println(err)
 				}
 			} else {
-				//log.Println(fmt.Sprintf("File too large %v  [%d / %d]", i.Name, i.Size, driveSize))
+				log.Println(fmt.Sprintf("File too large %v  [%d / %d]", i.Name, i.Size, driveSize))
 			}
 		}
 	}
