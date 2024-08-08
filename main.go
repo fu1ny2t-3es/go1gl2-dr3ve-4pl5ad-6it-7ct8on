@@ -139,12 +139,14 @@ func main() {
 						}
 					} else {
 						log.Println(err)
+						log.Println(fmt.Sprintf("File error %v  [%d / %d]", i.Name, i.Size, driveSize))
 					}
 				} else {
 					log.Println(err)
+					log.Println(fmt.Sprintf("File error %v  [%d / %d]", i.Name, i.Size, driveSize))
 				}
 			} else {
-				log.Println(fmt.Sprintf("File too large %v  [%d / %d]", i.Name, i.Size, driveSize))
+				//log.Println(fmt.Sprintf("File too large %v  [%d / %d]", i.Name, i.Size, driveSize))
 			}
 		}
 	}
