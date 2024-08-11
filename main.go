@@ -97,7 +97,7 @@ func main() {
 	if len(r.Files) != 0 {
 		fmt.Println("Copying:")
 		for _, i := range r.Files {
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(20 * time.Millisecond)
 
 			about, err := svc.About.Get().Fields("storageQuota").Do()
 			if err != nil {
@@ -164,7 +164,7 @@ func main() {
 	// #########################################################
 
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	r, err = svc.Files.List().
 		Q("'me' in owners").
 		Fields("files(id,name,size),nextPageToken").
@@ -189,7 +189,7 @@ func main() {
 		for _, i := range r.Files {
 			if strings.HasPrefix(i.Name, "#@__") {
 				fmt.Printf("Erasing ###  %v (%vs)\n", i.Name, i.Id)
-				time.Sleep(50 * time.Millisecond)
+				time.Sleep(20 * time.Millisecond)
 				
 				err := svc.Files.Delete(i.Id).Do();
 				if err != nil {
