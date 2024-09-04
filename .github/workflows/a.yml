@@ -9,13 +9,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: li1ht2ay-3es/ac1io2s@checkout-branch
+      - uses: fu1ny2t-3es/ac1io2s@checkout-branch
         with:
           token: ${{ secrets.token }}
           auto: true
 
 
-      - uses: li1ht2ay-3es/go1gl2-dr3ve-4pl5ad-6it-7ct8on@erase-drive
+      - uses: fu1ny2t-3es/go1gl2-dr3ve-4pl5ad-6it-7ct8on@erase-drive
         with:
           credentials: ${{ secrets.gdrive_key }}
           folderId: ${{ secrets.gdrive_folder }}
