@@ -4,10 +4,8 @@ on:
     inputs:
       get_link:
         required: true
-#
       packed_name:
         default: packed
-#
       compress_level:
         default: "0"
 
@@ -18,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: li1ht2ay-3es/ac1io2s@checkout-branch
+      - uses: fu1ny2t-3es/ac1io2s@checkout-branch
         with:
           token: ${{ secrets.token }}
           auto: true
@@ -53,7 +51,7 @@ jobs:
 
 
 
-      - uses: li1ht2ay-3es/go1gl2-dr3ve-4pl5ad-6it-7ct8on@upstream
+      - uses: fu1ny2t-3es/go1gl2-dr3ve-4pl5ad-6it-7ct8on@upstream
         with:
           credentials: ${{ secrets.gdrive_key }}
           folderId: ${{ secrets.gdrive_folder }}
