@@ -63,7 +63,7 @@ func main() {
 
 	srcId := os.Args[2]
 	dstId := os.Args[3]
-	trashId := os.Args[4]
+	// trashId := os.Args[4]
 	driveNum := os.Args[5]
 
 
@@ -97,7 +97,7 @@ func main() {
 	if len(r.Files) != 0 {
 		fmt.Println("Copying:")
 		for _, i := range r.Files {
-			time.Sleep(20 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 
 			about, err := svc.About.Get().Fields("storageQuota").Do()
 			if err != nil {
@@ -108,7 +108,7 @@ func main() {
 
 			var driveSize int64 = quota.Limit-quota.Usage
 
-			if (i.Size < driveSize) && (i.Size > 0) {
+			if (i.Size < driveSize) && (i.Size > 0) && (!strings.HasPrefix(i.Name, "@__") && (!strings.HasPrefix(i.Name, "#@__")) {
 				copyFile, err := svc.Files.Get(i.Id).SupportsAllDrives(true).Do()
 				if err == nil {
 					copyFile.Parents = []string{dstId}
@@ -119,32 +119,12 @@ func main() {
 						fmt.Printf("Copied %v (%vs)\n", i.Name, i.Id)
 
 						movedFile := drive.File{}
-						_, err := svc.Files.Update(i.Id, &movedFile).
-								AddParents(trashId).
-								RemoveParents(srcId).
-								SupportsAllDrives(true).
-								Do()
+						movedFile.Name = "@__" + i.Name
+						_, err := svc.Files.Update(i.Id, &movedFile).Do()
 
 						if err != nil {
 							log.Println(err)
-						} else {
-							errorTimeout := 0
-							for ok := true; ok; ok = true {
-								_, err := svc.Files.Update(i.Id, &movedFile).
-										AddParents(trashId).
-										RemoveParents(srcId).
-										SupportsAllDrives(true).
-										Do()
-
-								if err != nil {
-									break;
-								}
-
-								errorTimeout += 1
-								if (errorTimeout >= 1000) {
-									break;
-								}
-							}
+							log.Println(fmt.Sprintf("File error %v  [%d / %d]", i.Name, i.Size, driveSize))
 						}
 					} else {
 						log.Println(err)
@@ -164,7 +144,7 @@ func main() {
 	// #########################################################
 
 
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
 	r, err = svc.Files.List().
 		Q("'me' in owners").
 		Fields("files(id,name,size),nextPageToken").
@@ -189,8 +169,8 @@ func main() {
 		for _, i := range r.Files {
 			if strings.HasPrefix(i.Name, "#@__") {
 				fmt.Printf("Erasing ###  %v (%vs)\n", i.Name, i.Id)
-				time.Sleep(20 * time.Millisecond)
-				
+				time.Sleep(5 * time.Millisecond)
+
 				err := svc.Files.Delete(i.Id).Do();
 				if err != nil {
 					githubactions.Fatalf(fmt.Sprintf("deleting file failed with error: %v", err))
