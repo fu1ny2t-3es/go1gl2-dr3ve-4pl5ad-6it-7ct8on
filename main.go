@@ -108,7 +108,7 @@ func main() {
 
 			var driveSize int64 = quota.Limit-quota.Usage
 
-			if (i.Size < driveSize) && (i.Size > 0) && (!strings.HasPrefix(i.Name, "@__") && (!strings.HasPrefix(i.Name, "#@__")) {
+			if (i.Size < driveSize) && (i.Size > 0) && (!strings.HasPrefix(i.Name, "@__")) && (!strings.HasPrefix(i.Name, "#@__")) {
 				copyFile, err := svc.Files.Get(i.Id).SupportsAllDrives(true).Do()
 				if err == nil {
 					copyFile.Parents = []string{dstId}
